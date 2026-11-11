@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2a44">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Minhas Cifras</title>
+<style>
+:root{--bg:#f6f4ef;--fg:#1d2230;--card:#fff;--bd:#ddd8cc;--pri:#1f2a44;--pri-fg:#fff;--ac:#b3261e;--mut:#6a6f7c;--chip:#ece8dc;--fs:16px}
+:root[data-tema="escuro"]{--bg:#12151c;--fg:#e8e6df;--card:#1c212c;--bd:#2f3646;--pri:#7fa4ff;--pri-fg:#0d1220;--ac:#ffb454;--mut:#9aa1b2;--chip:#283042}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding-bottom:76px}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;min-height:44px}
+textarea{font-family:ui-monospace,"Cascadia Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:14px;line-height:1.35;white-space:pre;overflow:auto}
+label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
+label input,label select,label textarea{margin-top:4px;color:var(--fg)}
+.load{padding:40px;text-align:center;color:var(--mut)}
+.top{display:flex;align-items:center;gap:10px;padding:14px 14px 6px;position:sticky;top:0;background:var(--bg);z-index:5}
+.top h1{flex:1;font-size:20px;margin:0}
+.btn{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:0 14px;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:15px}
+.btn.pri{background:var(--pri);color:var(--pri-fg);border-color:var(--pri)}
+.btn.perigo{color:#c0392b;border-color:#c0392b55}
+.ico{background:none;border:0;min-width:44px;min-height:44px;font-size:20px;cursor:pointer;border-radius:10px}
+.busca{display:flex;gap:8px;padding:6px 14px;flex-wrap:wrap}
+.busca input{flex:1 1 180px}.busca select{width:auto;flex:0 0 auto}
+.painel{margin:4px 14px;padding:10px 12px;background:var(--card);border:1px solid var(--bd);border-radius:12px}
+.gt{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:10px 0 6px}
+.chip{border:1px solid var(--bd);background:var(--chip);border-radius:20px;padding:6px 12px;margin:0 6px 6px 0;cursor:pointer;min-height:36px}
+.chip.on{background:var(--pri);color:var(--pri-fg);border-color:var(--pri)}
+.lista{padding:6px 14px}
+.card{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 6px 10px 14px;margin-bottom:8px;cursor:pointer}
+.card .ct{flex:1;min-width:0}.card b{display:block;overflow:hidden;text-overflow:ellipsis}
+.sub{font-size:13px;color:var(--mut)}
+.tags{margin-top:4px}.tags span{display:inline-block;font-size:11px;background:var(--chip);border-radius:10px;padding:2px 8px;margin:0 4px 2px 0}
+.vazio{text-align:center;color:var(--mut);padding:30px 10px}
+.nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);z-index:10}
+.nav button{flex:1;background:none;border:0;padding:8px 0;font-size:12px;color:var(--mut);cursor:pointer;min-height:56px}
+.nav button span{display:block;font-size:20px}.nav button.on{color:var(--pri);font-weight:600}
+.form{padding:0 14px 20px}.dois{display:flex;gap:10px;align-items:flex-end}.dois>*{flex:1}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.aviso{margin:6px 14px;padding:10px 12px;background:#fff3cd;color:#5c4400;border-radius:10px;font-size:14px}
+.item{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:8px;margin-bottom:8px}
+.ih{display:flex;gap:4px;align-items:center}.ih input{flex:1;min-height:40px}.mv{display:flex}
+.escolha{width:100%;text-align:left;margin-top:6px;background:var(--chip);border:1px dashed var(--bd);border-radius:10px;padding:10px 12px;min-height:44px;cursor:pointer}
+.escolha.ok{border-style:solid;font-weight:600}
+pre.cifra{margin:0;font-family:ui-monospace,"Cascadia Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:var(--fs);line-height:1.38;white-space:pre;overflow-x:auto}
+pre.prev{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;--fs:14px}
+.ac{color:var(--ac);font-weight:700}
+.pbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--bd);padding:4px 6px;display:flex;flex-wrap:wrap;align-items:center;gap:2px}
+.pbar .ico{min-width:40px;min-height:44px;font-size:17px;font-weight:600}
+.pbar .vel{flex:1 1 100%;display:none;align-items:center;gap:8px;padding:0 8px 6px}
+.pbar .vel.on{display:flex}.pbar .vel input{padding:0;min-height:30px}
+.plista{padding:0 14px 80px;--fs:16px}
+.song{scroll-margin-top:var(--ph,56px);padding-top:18px;border-bottom:1px dashed var(--bd);padding-bottom:18px}
+.song .mom{display:inline-block;background:var(--pri);color:var(--pri-fg);font-size:12px;border-radius:12px;padding:2px 10px;margin-bottom:6px}
+.song h2{margin:0;font-size:22px}
+.stools{display:flex;gap:6px;align-items:center;margin:8px 0 10px;flex-wrap:wrap}
+.stools .btn{min-height:36px;padding:0 10px;font-size:14px}
+.semsong{color:var(--mut);font-style:italic;padding:10px 0}
+#modal{position:fixed;inset:0;background:#0009;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.mbox{background:var(--bg);width:100%;max-width:640px;max-height:88vh;border-radius:16px 16px 0 0;padding:12px 14px;display:flex;flex-direction:column}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+#plista{overflow:auto;margin-top:8px}
+.chk{display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px;margin:8px 0 0}.chk input{width:auto;min-height:0}
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:99;font-size:14px;max-width:90%;text-align:center}
+#toast.on{opacity:1}
+.login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;text-align:center}
+.login h1{margin:0}
+.cfg h3{margin:22px 0 4px}.cfg textarea{white-space:pre;min-height:90px;font-family:inherit;font-size:15px}
+.bloco{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px 12px 12px;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="raiz"><div class="load">Carregando…</div></div>
+<div id="toast"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
