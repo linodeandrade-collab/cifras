@@ -1,6 +1,6 @@
 {
-  "name": "Minhas Cifras",
-  "short_name": "Cifras",
+  "name": "Tutti",
+  "short_name": "Tutti",
   "description": "Biblioteca de cifras e repertórios",
   "start_url": "./index.html",
   "scope": "./",
