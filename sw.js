@@ -1,5 +1,5 @@
-const VERSAO = "cifras-v1";
-const LOCAIS = ["./", "./index.html", "./app.js", "./cifra.js", "./manifest.json", "./icon-192.png", "./icon-512.png"];
+const VERSAO = "cifras-v2";
+const LOCAIS = ["./", "./index.html", "./app.js", "./cifra.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./dev1.jpg", "./dev2.jpg", "./dev3.jpg", "./dev4.jpg", "./dev5.jpg", "./dev6.jpg"];
 const EXTERNOS = [
   "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
   "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
@@ -11,7 +11,7 @@ const EXTERNOS = [
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(VERSAO).then(async (c) => {
-      await c.addAll(LOCAIS).catch(() => {});
+      await Promise.all(LOCAIS.map((u) => c.add(u).catch(() => {})));
       await Promise.all(EXTERNOS.map((u) => c.add(u).catch(() => {})));
     })
   );

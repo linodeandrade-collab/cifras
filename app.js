@@ -59,9 +59,10 @@ const PADRAO = {
   ],
   momentos: MOMENTOS_MISSA,
   modelos: [{ id: "missa", nome: "Missa", momentos: MOMENTOS_MISSA }],
+  inicio: { texto: "", fonte: "" },
 };
 function normalizar(c) {
-  const r = { campos: [], momentos: c.momentos ?? PADRAO.momentos, modelos: c.modelos ?? PADRAO.modelos };
+  const r = { campos: [], momentos: c.momentos ?? PADRAO.momentos, modelos: c.modelos ?? PADRAO.modelos, inicio: { texto: (c.inicio && c.inicio.texto) || "", fonte: (c.inicio && c.inicio.fonte) || "" } };
   for (let i = 0; i < 5; i++) {
     const x = (c.campos || [])[i] || {};
     r.campos.push({ nome: x.nome || "", valores: x.valores || [] });
@@ -69,7 +70,7 @@ function normalizar(c) {
   return r;
 }
 
-let user = null, cifras = [], reps = [], config = null, unsubs = [];
+let user = null, cifras = [], reps = [], config = null, unsubs = [], rec = { cifras: [], reps: [] };
 const col = (n) => collection(db, "usuarios", user.uid, n);
 const ref = (n, id) => doc(db, "usuarios", user.uid, n, id);
 const gravar = (n, id, dados) => setDoc(ref(n, id), dados).catch((e) => toast("Erro ao salvar: " + e.message));
@@ -78,34 +79,40 @@ const apagar = (n, id) => deleteDoc(ref(n, id)).catch((e) => toast("Erro ao excl
 function iniciarDados() {
   unsubs.push(onSnapshot(col("cifras"), (s) => { cifras = s.docs.map((d) => ({ id: d.id, ...d.data() })); atualizarTela(); }));
   unsubs.push(onSnapshot(col("repertorios"), (s) => { reps = s.docs.map((d) => ({ id: d.id, ...d.data() })); atualizarTela(); }));
+  unsubs.push(onSnapshot(ref("config", "recentes"), (s) => {
+    const d = s.exists() ? s.data() : {};
+    rec = { cifras: d.cifras || [], reps: d.reps || [] };
+    atualizarTela();
+  }));
   unsubs.push(onSnapshot(ref("config", "geral"), (s) => {
     if (s.exists()) config = normalizar(s.data());
     else { config = structuredClone(PADRAO); gravar("config", "geral", config); }
     atualizarTela();
   }));
 }
-function atualizarTela() { if (["cifras", "reps"].includes(S.tela) || !raiz.innerHTML || raiz.querySelector(".load")) render(); }
+function atualizarTela() { if (["cifras", "reps"].includes(S.tela) || (S.tela === "inicio" && !ID) || !raiz.innerHTML || raiz.querySelector(".load")) render(); }
 
 onAuthStateChanged(auth, (u) => {
   user = u;
   unsubs.forEach((f) => f());
   unsubs = [];
   if (u) iniciarDados();
-  else { cifras = []; reps = []; config = null; }
+  else { cifras = []; reps = []; config = null; rec = { cifras: [], reps: [] }; }
   render();
 });
 
 /* ---------- estado de tela ---------- */
-const S = { tela: "cifras", volta: "cifras", q: "", ord: "titulo", filtros: {}, mostrarFiltros: false, qr: "", ordr: "desc", tipoR: "" };
-let D = null, RD = null, CD = null, P = null, PK = null;
-const PRINCIPAIS = ["cifras", "reps", "config"];
+const S = { tela: "inicio", volta: "inicio", menu: false, q: "", ord: "titulo", filtros: {}, mostrarFiltros: false, qr: "", ordr: "desc", tipoR: "" };
+let D = null, RD = null, CD = null, P = null, PK = null, ID = null;
+const PRINCIPAIS = ["inicio", "cifras", "reps", "config"];
 
 function render() {
   if (!user) return telaLogin();
   if (!config) { raiz.innerHTML = '<div class="load">Carregando…</div>'; return; }
   const t = S.tela;
   let h = "";
-  if (t === "cifras") h = telaCifras();
+  if (t === "inicio") h = telaInicio();
+  else if (t === "cifras") h = telaCifras();
   else if (t === "reps") h = telaReps();
   else if (t === "config") h = telaConfig();
   else if (t === "editCifra") h = telaEditCifra();
@@ -131,15 +138,72 @@ function voltar(h = true) {
 addEventListener("popstate", () => {
   if ($("#modal")) { fecharPicker(); return; }
   if (!PRINCIPAIS.includes(S.tela)) voltar(false);
+  else { render(); scrollTo(0, 0); }
 });
 const nav = () =>
-  `<nav class="nav">${[["cifras", "🎵", "Cifras"], ["reps", "📋", "Repertórios"], ["config", "⚙️", "Ajustes"]]
+  `<nav class="nav">${[["inicio", "🏠", "Início"], ["cifras", "🎵", "Cifras"], ["reps", "📋", "Repertórios"], ["config", "⚙️", "Ajustes"]]
     .map(([k, i, t]) => `<button class="${S.tela === k ? "on" : ""}" data-act="ir" data-t="${k}"><span>${i}</span>${t}</button>`)
     .join("")}</nav>`;
 
+
+/* ---------- tela inicial ---------- */
+function marcar(tipo, id) {
+  if (!id || !user) return;
+  rec = { ...rec, [tipo]: [id, ...(rec[tipo] || []).filter((x) => x !== id)].slice(0, 6) };
+  gravar("config", "recentes", rec);
+}
+function listaRecentes(tipo) {
+  const base = tipo === "cifras" ? cifras : reps;
+  const itens = (rec[tipo] || []).map((id) => base.find((x) => x.id === id)).filter(Boolean).slice(0, 5);
+  if (!itens.length) return `<div class="rvazio">${tipo === "cifras" ? "As cifras que você abrir aparecem aqui." : "Os repertórios que você abrir aparecem aqui."}</div>`;
+  return itens.map((x) => tipo === "cifras"
+    ? `<div class="row" data-act="tocar1" data-id="${x.id}" data-v="inicio"><div class="rt"><b>${esc(x.titulo)}</b><span class="sub">${esc(x.artista || "")}${x.tom ? (x.artista ? " · " : "") + "Tom " + esc(x.tom) : ""}</span></div><span class="seta">›</span></div>`
+    : `<div class="row" data-act="tocarR" data-id="${x.id}" data-v="inicio"><div class="rt"><b>${esc(x.nome)}</b><span class="sub">${esc(fmtData(x.data, x.hora))}${x.tipo ? " · " + esc(x.tipo) : ""}</span></div><span class="seta">›</span></div>`).join("");
+}
+const NIMG = 6;
+const IMG_INICIO = (() => {
+  let ult = Number(lsGet("imgUlt"));
+  let n;
+  do { n = 1 + Math.floor(Math.random() * NIMG); } while (n === ult && NIMG > 1);
+  lsSet("imgUlt", n);
+  return n;
+})();
+function primeiroNome() { return String((user && user.displayName) || "").trim().split(/\s+/)[0] || ""; }
+function saudacao() {
+  const h = new Date().getHours();
+  return h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+}
+function telaInicio() {
+  const nome = primeiroNome();
+  const tema = document.documentElement.dataset.tema === "escuro";
+  const menu = S.menu
+    ? `<div class="menu"><button data-act="tema">${tema ? "☀️ Tema claro" : "🌙 Tema escuro"}</button><button data-act="ir" data-t="config">⚙️ Ajustes</button><button data-act="sair">↪ Sair da conta</button></div>`
+    : "";
+  const ini = config.inicio || { texto: "", fonte: "" };
+  const bloco = ID
+    ? `<div class="vers"><label>Oração ou versículo<textarea data-ini="texto" rows="5" style="white-space:pre-wrap;font-family:inherit;font-size:16px">${esc(ID.texto)}</textarea></label>
+       <label>Referência (opcional)<input data-ini="fonte" value="${esc(ID.fonte)}" placeholder="ex.: Salmo 23, 1"></label>
+       <div class="acoes"><button class="btn pri" data-act="salvarIni">Salvar</button><button class="btn" data-act="cancelarIni">Cancelar</button></div></div>`
+    : ini.texto
+    ? `<div class="vers"><button class="ico edv" data-act="editarIni" aria-label="Editar">✎</button><blockquote>${esc(ini.texto)}</blockquote>${ini.fonte ? `<div class="fonte">— ${esc(ini.fonte)}</div>` : ""}</div>`
+    : `<div class="vers vazioV"><button class="btn" data-act="editarIni">✎ Cadastrar uma oração ou versículo</button></div>`;
+  return `<div class="home">
+  <header class="hhead"><img src="icon-192.png" alt=""><span class="hnome">Tutti</span><button class="ico" data-act="menu" aria-label="Menu" aria-expanded="${S.menu}">☰</button>${menu}</header>
+  <h1 class="ola">${saudacao()}${nome ? ", " + esc(nome) : ""}</h1>
+  <div class="hgrid">
+    <aside class="criar"><div class="gt">Criar</div><button class="btn pri" data-act="nova" data-v="inicio"><span class="mais">＋</span> Nova cifra</button><button class="btn pri" data-act="novoR" data-v="inicio"><span class="mais">＋</span> Novo repertório</button></aside>
+    <main class="hmain">
+      <div class="hero"><img src="dev${IMG_INICIO}.jpg" alt="Imagem de devoção"></div>
+      ${bloco}
+      <div class="rec2"><section><div class="gt">Últimas cifras</div><div class="rlista">${listaRecentes("cifras")}</div></section><section><div class="gt">Últimos repertórios</div><div class="rlista">${listaRecentes("reps")}</div></section></div>
+    </main>
+  </div>
+  </div>`;
+}
+
 /* ---------- login ---------- */
 function telaLogin() {
-  raiz.innerHTML = `<div class="login"><h1>🎵 Minhas Cifras</h1><p class="sub">Entre com sua conta Google para ver suas cifras e repertórios em qualquer aparelho.</p><button class="btn pri" data-act="login">Entrar com Google</button><div id="erroLogin" class="sub"></div></div>`;
+  raiz.innerHTML = `<div class="login"><img class="logo" src="icon-192.png" alt=""><h1>Tutti</h1><p class="sub">Entre com sua conta Google para ver suas cifras e repertórios em qualquer aparelho.</p><button class="btn pri" data-act="login">Entrar com Google</button><div id="erroLogin" class="sub"></div></div>`;
 }
 
 /* ---------- biblioteca ---------- */
@@ -191,7 +255,7 @@ const chips = (k, nome, vals, sel) =>
   `<div class="gt">${esc(nome)}</div><div>${vals.map((v) => `<button type="button" class="chip ${sel.includes(v) ? "on" : ""}" data-act="chip" data-k="${k}" data-v="${esc(v)}">${esc(v)}</button>`).join("")}</div>`;
 function telaEditCifra() {
   const campos = config.campos.map((c, i) => ({ k: "c" + i, ...c })).filter((c) => c.nome && c.valores.length);
-  return `<header class="top"><button class="ico" data-act="voltar">←</button><h1>${D.id ? "Editar cifra" : "Nova cifra"}</h1></header>
+  return `<header class="top"><button class="btn voltar" data-act="voltar" aria-label="Voltar">← Voltar</button><h1>${D.id ? "Editar cifra" : "Nova cifra"}</h1></header>
   ${D.revisar ? '<div class="aviso">Revise o texto importado: ajuste os acordes sobre as sílabas e só então toque em “Confirmar e salvar”.</div>' : ""}
   <div class="form">
   <label>Título<input data-f="titulo" value="${esc(D.titulo)}"></label>
@@ -336,7 +400,7 @@ function itemHtml(it, i) {
 }
 function telaEditRep() {
   const tipos = [...new Set(reps.map((r) => r.tipo).filter(Boolean))];
-  return `<header class="top"><button class="ico" data-act="voltar">←</button><h1>${RD.criado ? "Repertório" : "Novo repertório"}</h1></header>
+  return `<header class="top"><button class="btn voltar" data-act="voltar" aria-label="Voltar">← Voltar</button><h1>${RD.criado ? "Repertório" : "Novo repertório"}</h1></header>
   <div class="form">
   <label>Nome<input data-r="nome" value="${esc(RD.nome)}" placeholder="ex.: Missa de domingo"></label>
   <div class="dois"><label>Data<input type="date" data-r="data" value="${esc(RD.data)}"></label><label>Horário<input type="time" data-r="hora" value="${esc(RD.hora)}"></label></div>
@@ -412,6 +476,7 @@ function salvarConfig() {
     campos: CD.campos.map((c) => ({ nome: c.nome.trim(), valores: lista(c.txt) })),
     momentos: lista(CD.momentosTxt),
     modelos: CD.modelos.filter((m) => m.nome.trim()).map((m) => ({ id: m.id, nome: m.nome.trim(), momentos: lista(m.txt) })),
+    inicio: config.inicio || { texto: "", fonte: "" },
   };
   gravar("config", "geral", config);
   CD = null;
@@ -461,7 +526,7 @@ function telaPlayer() {
     <div class="stools"><button class="btn" data-act="tr" data-i="${i}" data-d="-1">♭ −</button><button class="btn" data-act="tr" data-i="${i}" data-d="1">♯ +</button>${c.link ? `<a class="btn" href="${esc(c.link)}" target="_blank" rel="noopener">🎧 Ouvir</a>` : ""}</div>
     <pre class="cifra" id="c${i}">${htmlCifra(c.texto)}</pre></section>`;
   }).join("");
-  return `<div class="pbar" id="pbar"><button class="ico" data-act="voltar" aria-label="Voltar">←</button><button class="ico" data-act="prevS" aria-label="Anterior">⏮</button><button class="ico" data-act="nextS" aria-label="Próxima">⏭</button><button class="ico" data-act="fm">A−</button><button class="ico" data-act="fp">A+</button><button class="ico" data-act="fit" aria-label="Ajustar à tela">↔</button><button class="ico" id="bplay" data-act="play" aria-label="Rolagem automática">▶</button><button class="ico" data-act="tema" aria-label="Modo escuro">🌙</button>
+  return `<div class="pbar" id="pbar"><button class="btn voltar" data-act="voltar" aria-label="Voltar">← Voltar</button><button class="ico" data-act="prevS" aria-label="Anterior">⏮</button><button class="ico" data-act="nextS" aria-label="Próxima">⏭</button><button class="ico" data-act="fm">A−</button><button class="ico" data-act="fp">A+</button><button class="ico" data-act="fit" aria-label="Ajustar à tela">↔</button><button class="ico" id="bplay" data-act="play" aria-label="Rolagem automática">▶</button><button class="ico" data-act="tema" aria-label="Modo escuro">🌙</button>
   <div class="vel" id="vel"><span>🐢</span><input type="range" id="velr" min="5" max="120" value="${P.vel}"><span>🐇</span></div></div>
   <div class="plista" id="plista2">${secoes}</div>`;
 }
@@ -527,6 +592,7 @@ function abrirRep(r) { RD = { ...r, itens: (r.itens || []).map((i) => ({ ...i })
 
 document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
+  if (S.menu && !(el && el.dataset.act === "menu") && !e.target.closest(".menu")) { S.menu = false; if (!el) render(); }
   if (!el) return;
   const a = el.dataset.act, id = el.dataset.id, i = Number(el.dataset.i);
   switch (a) {
@@ -534,16 +600,20 @@ document.addEventListener("click", async (e) => {
       try { await signInWithPopup(auth, new GoogleAuthProvider()); }
       catch (err) { const x = $("#erroLogin"); if (x) x.textContent = "Não consegui entrar: " + (err.code || err.message); }
       break;
-    case "sair": if (confirm("Sair da conta neste aparelho?")) signOut(auth); break;
-    case "ir": CD = null; S.tela = el.dataset.t; render(); scrollTo(0, 0); break;
+    case "sair": S.menu = false; if (confirm("Sair da conta neste aparelho?")) signOut(auth); else render(); break;
+    case "ir": CD = null; ID = null; S.menu = false; S.tela = el.dataset.t; render(); scrollTo(0, 0); break;
     case "voltar": voltar(); break;
-    case "tema": lsSet("tema", document.documentElement.dataset.tema === "escuro" ? "claro" : "escuro"); aplicarTema(); break;
+    case "tema": lsSet("tema", document.documentElement.dataset.tema === "escuro" ? "claro" : "escuro"); aplicarTema(); S.menu = false; if (S.tela === "inicio") render(); break;
+    case "menu": S.menu = !S.menu; render(); break;
+    case "editarIni": ID = { texto: (config.inicio || {}).texto || "", fonte: (config.inicio || {}).fonte || "" }; render(); break;
+    case "cancelarIni": ID = null; render(); break;
+    case "salvarIni": config.inicio = { texto: ID.texto.trim(), fonte: ID.fonte.trim() }; gravar("config", "geral", config); ID = null; toast("Salvo"); render(); break;
     case "filtros": S.mostrarFiltros = !S.mostrarFiltros; render(); break;
     case "filtro": { const k = el.dataset.k, v = el.dataset.v; const l = S.filtros[k] || (S.filtros[k] = []); const x = l.indexOf(v); x >= 0 ? l.splice(x, 1) : l.push(v); render(); break; }
     case "limpar": S.filtros = {}; render(); break;
-    case "nova": D = novaCifra(); navegar("editCifra", "cifras"); break;
-    case "edit": { const c = cifras.find((x) => x.id === id); D = { ...novaCifra(), ...c, campos: structuredClone(c.campos || {}), momentos: [...(c.momentos || [])] }; navegar("editCifra", "cifras"); break; }
-    case "tocar1": { const c = cifras.find((x) => x.id === id); abrirPlayer([{ momento: "", cifra: c }], c.titulo, "cifras"); break; }
+    case "nova": D = novaCifra(); navegar("editCifra", el.dataset.v || "cifras"); break;
+    case "edit": { marcar("cifras", id); const c = cifras.find((x) => x.id === id); D = { ...novaCifra(), ...c, campos: structuredClone(c.campos || {}), momentos: [...(c.momentos || [])] }; navegar("editCifra", "cifras"); break; }
+    case "tocar1": { const c = cifras.find((x) => x.id === id); marcar("cifras", id); abrirPlayer([{ momento: "", cifra: c }], c.titulo, el.dataset.v || "cifras"); break; }
     case "chip": {
       const k = el.dataset.k, v = el.dataset.v;
       const l = k === "momentos" ? D.momentos : D.campos[k] || (D.campos[k] = []);
@@ -554,10 +624,10 @@ document.addEventListener("click", async (e) => {
     case "detectar": { const t = tomInicial(D.texto); if (t) { D.tom = t; const f = $('[data-f="tom"]'); if (f) f.value = t; } else toast("Não encontrei acordes no texto."); break; }
     case "salvarC": salvarCifra(); break;
     case "excluirC": if (confirm("Excluir esta cifra? Isso não pode ser desfeito.")) { apagar("cifras", D.id); voltar(); } break;
-    case "novoR": RD = { id: "", nome: "", data: "", hora: "", tipo: "", modeloId: "", itens: [], criado: 0 }; navegar("editRep", "reps"); break;
-    case "editR": abrirRep(reps.find((x) => x.id === id)); break;
-    case "tocarR": { const r = reps.find((x) => x.id === id); abrirPlayer(itensDeRep(r), r.nome, "reps"); break; }
-    case "tocarRD": abrirPlayer(itensDeRep({ itens: RD.itens }), RD.nome, "editRep"); break;
+    case "novoR": RD = { id: "", nome: "", data: "", hora: "", tipo: "", modeloId: "", itens: [], criado: 0 }; navegar("editRep", el.dataset.v || "reps"); break;
+    case "editR": marcar("reps", id); abrirRep(reps.find((x) => x.id === id)); break;
+    case "tocarR": { const r = reps.find((x) => x.id === id); marcar("reps", id); abrirPlayer(itensDeRep(r), r.nome, el.dataset.v || "reps"); break; }
+    case "tocarRD": if (RD.id) marcar("reps", RD.id); abrirPlayer(itensDeRep({ itens: RD.itens }), RD.nome, "editRep"); break;
     case "salvarR": salvarRep(); break;
     case "excluirR": if (confirm("Excluir este repertório?")) { apagar("repertorios", RD.id); voltar(); } break;
     case "dupR": { const c = { ...RD, id: "", nome: RD.nome + " (cópia)", criado: 0, itens: RD.itens.map((x) => ({ ...x })) }; RD = c; render(); toast("Cópia criada. Ajuste e salve."); break; }
@@ -596,6 +666,7 @@ document.addEventListener("input", (e) => {
   else if (d.r && RD) RD[d.r] = t.value;
   else if (d.ri !== undefined && RD) RD.itens[Number(d.ri)][d.rk] = t.value;
   else if (d.cp && CD) setPath(CD, d.cp, t.value);
+  else if (d.ini && ID) ID[d.ini] = t.value;
   else if (t.id === "q") { S.q = t.value; atualizarLista(); }
   else if (t.id === "qr") { S.qr = t.value; atualizarLista(); }
   else if (t.id === "pq" && PK) { PK.q = t.value; $("#plista").innerHTML = listaPicker(); }
